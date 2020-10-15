@@ -1,0 +1,172 @@
+﻿@page "/todos/{id:int}"
+@inject HttpClient Http
+@inject Microsoft.AspNetCore.Components.NavigationManager navigation
+
+
+    @if (@mode == MODE.add) { <h1>Create</h1> } 
+    else {
+        <h1>Edit</h1>
+    }
+
+
+<hr />
+<div class="row">
+    <div class="col-md-6">
+        @*<form>
+            <div class="form-group">
+                <label for="Task" class="control-label">Task</label>
+                <input for="Task" class="form-control" @bind="@toDoItem.Task" />
+            </div>
+            <div class="form-group">
+                <label asp-for="Status" class="control-label">Status</label>
+                <input for="Status" class="form-control" @bind="@toDoItem.Status" />
+            </div>
+            <div class="form-group">
+                @if (@mode == MODE.add)
+                {
+                    <button type="button" class="btn btn-success" @onclick="@(async () => await CreateTodo())">Create</button>
+
+                }
+                else
+                {
+                    <button type="button" class="btn btn-success" @onclick="@(async () => await Update())">Update</button>
+                }
+                <button class="btn" @onclick="@cancel">Cancel</button>
+            </div>
+        </form>*@
+
+
+        <EditForm EditContext="@EditContext">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label for="name" class="control-label">Task: </label>
+                <InputText Id="name" Class="form-control" @bind-Value="@toDoItem.Task" @onkeyup='@(e => KeyUp(e, "Task"))'>
+                </InputText>
+                <ValidationMessage For="@(() => toDoItem.Task)" />
+            </div>
+
+            <div class="form-group">
+                <label for="body" class="control-label">Status: </label>
+                <InputText Id="body" Class="form-control" @bind-Value="@toDoItem.Status" @onkeyup='@(e => KeyUp(e, "Status"))'>
+                </InputText>
+                <ValidationMessage For="@(() => toDoItem.Status)" />
+            </div>
+            <div class="form-group">
+                @if (@mode == MODE.add)
+                {
+                    <button type="button" class="btn btn-success" disabled="@CreateDisabled" @onclick="@(async () => await CreateTodo())">Create</button>
+
+                }
+                else
+                {
+                    <button type="button" class="btn btn-success" @onclick="@(async () => await Update())">Update</button>
+                }
+                <button class="btn btn-default" @onclick="@cancel">Cancel</button>
+            </div>
+        </EditForm>
+
+    </div>
+</div>
+
+@code {
+
+    [Parameter]
+    public int id { get; set; }
+
+    public enum MODE
+    {
+        add,
+        edit
+    }
+    public MODE mode = MODE.add;
+
+    ToDo toDoItem = new ToDo();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (id != 0)
+        {
+            mode = MODE.edit;
+            toDoItem = await Http.GetJsonAsync<ToDo>("https://localhost:44327/api/ToDoes/" + Convert.ToInt64(id));
+        }
+        EditContext = new EditContext(toDoItem);
+        EditContext.OnFieldChanged += EditContext_OnFieldChanged;
+
+       await base.OnInitializedAsync();
+    }
+
+    protected async Task Update()
+    {
+        await Http.PutJsonAsync("https://localhost:44327/api/ToDoes/" + Convert.ToInt64(id), toDoItem);
+        navigation.NavigateTo("/todos");
+    }
+
+
+    protected async Task CreateTodo()
+    {
+        await Http.SendJsonAsync(HttpMethod.Post, "https://localhost:44327/api/ToDoes", toDoItem);
+        navigation.NavigateTo("todos");
+    }
+
+    void cancel()
+    {
+        navigation.NavigateTo("/todos");
+    }
+}
+
+@code
+    {
+    private EditContext EditContext;
+
+    protected string CreateDisabled { get; set; } = "disabled";
+
+    //    protected override void OnInitialized()
+    //    {
+
+    //}
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        base.OnAfterRender(firstRender);
+
+        SetOkDisabledStatus();
+    }
+
+    private void EditContext_OnFieldChanged(object sender, FieldChangedEventArgs e)
+    {
+        SetOkDisabledStatus();
+    }
+
+    void KeyUp(KeyboardEventArgs e, string memberName)
+    {
+        if (e.Key.Length == 1)
+        {
+            var property = toDoItem.GetType().GetProperty(memberName);
+            var value = property.GetValue(toDoItem);
+            property.SetValue(toDoItem, value + e.Key);
+
+            var id = EditContext.Field(memberName);
+
+            EditContext.NotifyFieldChanged(id);
+
+        }
+    }
+
+    private void SetOkDisabledStatus()
+    {
+        if (EditContext.Validate())
+        {
+            CreateDisabled = null;
+        }
+        else
+        {
+            CreateDisabled = "disabled";
+        }
+    }
+
+    public void Dispose()
+    {
+        EditContext.OnFieldChanged -= EditContext_OnFieldChanged;
+    }
+}
